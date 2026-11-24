@@ -71,7 +71,12 @@ public final class PopupCenter: ObservableObject {
     private let schedule: Schedule
 
     convenience init() {
-        self.init(now: { ProcessInfo.processInfo.systemUptime }) { delay, fire in
+        let clock = ContinuousClock()
+        let origin = clock.now
+        self.init(now: {
+            let elapsed = origin.duration(to: clock.now).components
+            return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+        }) { delay, fire in
             let task = Task { @MainActor in
                 // Bound each sleep to avoid overflowing nanoseconds for large durations.
                 do { try await Task.sleep(nanoseconds: UInt64(min(delay, 86_400) * 1e9)) }

@@ -10,19 +10,18 @@ struct PopupStack: View {
 
     var body: some View {
         let records = center.records.filter { $0.target == target && $0.phase != .waiting }
-        let modal = records.last { $0.options.blocksBackground && $0.phase.occupiesHost }
+        let modalIndex = records.lastIndex { $0.options.blocksBackground && $0.phase.occupiesHost }
+        let modal = modalIndex.map { records[$0].id }
         ZStack {
-            ForEach(records) { record in
-                let index = records.firstIndex { $0.id == record.id }!
+            ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
                 PopupLayer(record: record, regions: regions, focus: focus)
-                    .accessibilityHidden(record.phase == .suspended ||
-                        modal.map { top in records[index...].contains { $0.id == top.id && top.id != record.id } } == true)
+                    .accessibilityHidden(record.phase == .suspended || index < (modalIndex ?? 0))
                     .zIndex(Double(index))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PopupMarker { regions.boundsView = $0 })
-        .onChange(of: modal?.id, initial: true) { _, next in focus.modalChanged(next, regions: regions) }
+        .onChange(of: modal, initial: true) { _, next in focus.modalChanged(next, regions: regions) }
         .onDisappear { focus.modalChanged(nil, regions: regions) }
     }
 }
@@ -38,6 +37,7 @@ private struct PopupLayer: View {
     @State private var inserted = false
     @State private var generation = UUID()
     @State private var announced = false
+    @StateObject private var input = PopupPageInput()
 
     private var options: PopupOptions { record.options }
     private var radius: CGFloat { options.style == .panel ? 24 : 16 }
@@ -45,7 +45,8 @@ private struct PopupLayer: View {
     var body: some View {
         ZStack(alignment: options.alignment) {
             if options.blocksBackground {
-                Color.black.opacity(inserted ? 0.33 : 0.001)
+                Rectangle()
+                    .fill(options.backdropColor.opacity(inserted ? min(1, max(0, options.backdropOpacity)) : 0.001))
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -92,7 +93,7 @@ private struct PopupLayer: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(options.blocksBackground ? .isModal : [])
         .modifier(PopupEscape(enabled: options.allowsEscape, handle: record.id))
-        .allowsHitTesting(record.phase != .exiting)
+        .disabled(record.phase == .exiting)
     }
 
     private func applyPhase() {
@@ -101,12 +102,17 @@ private struct PopupLayer: View {
         let phase = record.phase
         switch phase {
         case .waiting: break
-        case .visible, .suspended:
+        case .suspended:
             inserted = true
-            if phase == .visible { notifyAccessibility() }
+            if case .page = record.target { input.suspend(record, regions: regions) }
+        case .visible:
+            inserted = true
+            input.resume()
+            notifyAccessibility()
         case .entering, .exiting:
             let entering = phase == .entering
-            let complete = {
+            if entering { input.resume() }
+            let complete: () -> Void = {
                 // SwiftUI may complete synchronously when the animation is disabled.
                 Task { @MainActor in
                     guard generation == token,
@@ -133,6 +139,27 @@ private struct PopupLayer: View {
                 UIAccessibility.post(notification: .announcement, argument: labels.joined(separator: ", "))
             }
         }
+    }
+}
+
+@MainActor
+private final class PopupPageInput: ObservableObject {
+    private weak var field: UIView?
+
+    func suspend(_ record: PopupRecord, regions: PopupHitRegions) {
+        guard record.options.requiresKeyboard,
+              let surface = regions.surfaces.object(forKey: record.id.id as NSUUID),
+              let window = surface.window, let focused = window.popupFocusedSubview,
+              focused.popupController === surface.popupController else { return }
+        let center = CGPoint(x: focused.bounds.midX, y: focused.bounds.midY)
+        guard surface.bounds.contains(surface.convert(center, from: focused)) else { return }
+        if focused.resignFirstResponder() { field = focused }
+    }
+
+    func resume() {
+        defer { field = nil }
+        guard let field, let window = field.window, window.isKeyWindow, window.popupFocusedSubview == nil else { return }
+        field.becomeFirstResponder()
     }
 }
 

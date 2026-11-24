@@ -28,6 +28,7 @@ struct InteractionLab: View {
             Picker("Background", selection: $background) {
                 ForEach(PopupBackground.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
+            .accessibilityIdentifier("backgroundPicker")
             Toggle("Request dark, portrait appearance", isOn: $useAppearance)
             Button("Show touch sample") {
                 var options = PopupOptions(style: .toast, group: "interaction")

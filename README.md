@@ -100,6 +100,29 @@ struct HelpCard: View {
 
 默认按 Scene 分组和去重。需要跨 Scene 协调时显式使用 `.application`。group 控制调度，identifier 用于业务去重，priority 只影响等待队列。样式可选 toast、card、panel；支持修改对齐、边距、转场、背景点击策略与超时。对需要用户决策的弹窗提供明确按钮。
 
+## 生命周期与查询
+
+从主线程调用 presenter。对需要处理结果的请求，保留返回的 handle。`onFirstDisplay` 在首次进场结束时触发一次。`onEnd` 会收到结束原因，挂起和恢复不会结束请求。
+
+```swift
+var options = PopupOptions(style: .panel, mode: .suspend, group: "editor")
+options.requiresKeyboard = true
+options.background = .dismiss
+
+let result = presenter.present(target: .window(scene: sceneID), options: options,
+                               onEnd: { reason in print(reason) }) {
+    DraftForm() // 业务自定义的 SwiftUI 表单
+}
+if case let .accepted(handle) = result {
+    // 需要取消这个请求时调用 presenter.dismiss(handle)。
+    print(handle.id)
+}
+```
+
+通过 `records(scene:group:scope:identifier:phase:)` 查看等待、活跃和挂起内容，使用 `activeIdentifiers` 或 `activeCount` 查询展示中的业务键及数量。用 `dismiss(group:scene:)` 清理当前 Scene 的一组弹窗，使用 `dismiss(scene:)` 清理整个 Scene。`dismissAll()` 涵盖应用内所有已注册的宿主。
+
+窗口中的颜色、字号、布局方向和地区设置继承 Scene 根的环境。对当前页面注入的业务模型，在弹窗内容上显式调用 `.environmentObject(model)` 或通过构造参数传入。应用和系统共同决定状态栏及旋转的最终表现。可在弹窗显示且布局稳定后，通过 `presenter.appearanceLimitations(for: handle)` 查询当前受限的外观请求。
+
 ## 运行示例与测试
 
 打开 [Demo 工程](Demo/FLSPopupDemo.xcodeproj)，选择 FLSPopupDemo 和 iPhone 或 iPad 模拟器，按 ⌘R。Demo 直接引用仓库根目录的 Swift 包，因此修改框架可以立即验证。UI 测试可从 Demo scheme 执行；调度单元测试可从包的 FLSPopup scheme 执行。具体验证项目见 [验证记录](VALIDATION.md)。

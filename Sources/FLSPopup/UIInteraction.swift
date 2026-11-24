@@ -58,8 +58,22 @@ extension UIView {
     }
 
     var popupFirstResponder: UIView? {
-        if isFirstResponder { return self }
-        return subviews.lazy.compactMap { $0.popupFirstResponder }.first
+        subviews.lazy.compactMap { $0.popupFirstResponder }.first ?? (isFirstResponder ? self : nil)
+    }
+}
+
+extension UIWindow {
+    var popupPresentedController: UIViewController? {
+        var controller = rootViewController
+        while let presented = controller?.presentedViewController, !presented.isBeingDismissed {
+            controller = presented
+        }
+        return controller
+    }
+
+    var popupFocusedSubview: UIView? {
+        guard let responder = popupFirstResponder, responder !== self else { return nil }
+        return responder
     }
 }
 

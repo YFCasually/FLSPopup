@@ -38,9 +38,17 @@ if let sceneID {
 | T06 | Turn on **Use the same business key**, present a card, then choose **Repeat business key on other host**. The card displays the duplicate rejection. Finish it and submit again. |
 | T08 | Open the system sheet. Try **Card on sheet**, then finish it. Choose **Card on underlying page** and close the sheet to reveal it. In **Interaction lab**, request a missing page and inspect the rejection. |
 | T09 | In **Interaction lab**, select each host and background behavior. Show the touch sample. Tap the content counter once, then tap the background counter once. Check which counter moved and whether the sample closed. Close any remaining sample before changing modes. |
-| T10 | Focus the sheet title and type. Save with the keyboard showing. A window notification appears over the sheet and typing can continue. Open **Window input panel**, type, close it and return to the sheet field. |
+| T10 | Focus the sheet title and type. Save with the keyboard showing. A window notification appears over the sheet and typing can continue. Open **Window input panel**, type a different value, then tap **Finish editing** with the keyboard still open. Type again without tapping the sheet field. The new text should append to the original sheet title. |
 | T11, T14 | Repeat the form and sheet flows with VoiceOver, Larger Text, Reduce Motion, landscape and split view. In **Interaction lab**, enable the appearance override, open and close the sample, and compare the sample and host. Use Instruments on a device for allocations after repeated window input. |
 | T12 | In the workbench, inspect recent events after interrupting, replacing and dismissing cards. Each accepted request should have one terminal event. The request list provides handle-based cancellation for entries reachable from the workbench. |
 | T13 | Save from the sheet, background the app promptly, wait longer than three seconds, and foreground it. The toast should resume its remaining time. In **Interaction lab** present the Bool binding twice, closing each time, then present the item binding and switch its identity before closing. |
 
 The event log and request numbers belong to each scene. The scheduler supplies the phases and end reasons. Simulator UI tests cover the flows in `UITests/PopupDemoTests.swift`. Device-only appearance, VoiceOver traversal and resource lifetime require manual observation.
+
+## Simulator verification
+
+On 2026-11-24, the full Demo UI suite passed on an iPhone 16 Plus simulator running iOS 18.5 with Xcode 27.1 and the system keyboard. All 10 tests passed with zero skips in 141 seconds.
+
+- **T03/T07** entered a draft, scrolled the first revision offscreen, and suspended the page beneath a window request. After replacing and closing that request, the original text remained. Revision 19 returned within 2 pt of its previous position relative to the scroll view.
+- **T09** exercised all four background policies on both hosts and checked content and background tap counts.
+- **T10** entered `one` in the sheet and `draft` in the window panel, then tapped **Finish editing** with the software keyboard visible. Sending `two` to the current responder produced `onetwo` in the original sheet field without tapping it again.

@@ -149,6 +149,55 @@ final class PopupCenterTests: XCTestCase {
         close(c, x); XCTAssertEqual(c.count(), 0)
     }
 
+    @MainActor func testEveryModeOnBothTargets() async {
+        for target in [page, window] {
+            for mode in PopupMode.allCases {
+                let center = makeCenter()
+                let first = add(center, "A", to: target)
+                let next = add(center, "B", mode, to: target)
+                switch mode {
+                case .queue:
+                    XCTAssertEqual(center.activeIdentifiers(), ["A"])
+                    close(center, first)
+                    XCTAssertEqual(center.activeIdentifiers(), ["B"])
+                case .interrupt:
+                    XCTAssertEqual(center.activeIdentifiers(), ["A", "B"])
+                case .suspend:
+                    XCTAssertEqual(center.records(phase: .suspended).map(\.id), [first])
+                    close(center, next)
+                    XCTAssertEqual(center.activeIdentifiers(), ["A"])
+                default:
+                    XCTAssertEqual(center.records.map(\.id), [next])
+                }
+            }
+        }
+    }
+
+    @MainActor func testHostRemovalReleasesContentAndTimerCallback() async {
+        final class Model {}
+        var timer: (@MainActor () -> Void)?
+        let center = PopupCenter(now: { 0 }, schedule: { _, fire in
+            timer = fire
+            return { timer = nil }
+        })
+        center.register(page)
+        weak var retained: Model?
+        let handle = PopupHandle()
+        do {
+            let model = Model()
+            retained = model
+            _ = center.present(target: page, options: .init(style: .toast), handle: handle) {
+                Button("Read") { _ = ObjectIdentifier(model) }
+            }
+        }
+        center.didAppear(handle)
+        XCTAssertNotNil(retained)
+        XCTAssertNotNil(timer)
+        center.unregister(page)
+        XCTAssertNil(retained)
+        XCTAssertNil(timer)
+    }
+
     @MainActor func testFirstDisplayFiresOnceAfterEntranceEvenWhenSuspended() async {
         let center = makeCenter()
         var displays: [PopupHandle] = []

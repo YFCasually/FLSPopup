@@ -28,6 +28,24 @@ public extension View {
     }
 }
 
+struct PopupWindowEnvironment: Equatable {
+    var colorScheme: ColorScheme
+    var dynamicTypeSize: DynamicTypeSize
+    var layoutDirection: LayoutDirection
+    var locale: Locale
+    var calendar: Calendar
+    var timeZone: TimeZone
+
+    init(_ values: EnvironmentValues) {
+        colorScheme = values.colorScheme
+        dynamicTypeSize = values.dynamicTypeSize
+        layoutDirection = values.layoutDirection
+        locale = values.locale
+        calendar = values.calendar
+        timeZone = values.timeZone
+    }
+}
+
 @MainActor
 private struct PopupSceneHost: ViewModifier {
     @StateObject private var host = PopupWindowHost()
@@ -47,7 +65,7 @@ private struct PopupSceneHost: ViewModifier {
             }
             .environment(\.popupSceneID, host.sceneID)
             .background(WindowProbe(
-                update: { host.environment = environment },
+                update: { host.environment = PopupWindowEnvironment(environment) },
                 attach: { host.attach($0) },
                 remove: { host.detach() }
             ))
@@ -88,6 +106,11 @@ private struct PopupPageHost: ViewModifier {
                                 PopupEscapeShortcut(handle: record.id)
                             }
                         }
+                }
+            }
+            .background {
+                if let hidden = layers.last?.options.statusBarHidden, active {
+                    Color.clear.statusBarHidden(hidden)
                 }
             }
             .environment(\.popupSceneID, scene)
